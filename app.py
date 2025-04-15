@@ -153,15 +153,15 @@ def handle_audio(temp_path):
     else:
         st.info(
             f"✅ Audio duration: {result['duration']} sec\n"
-            f"🧩 Chunks created: {result['chunk_count']}\n"
-            f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
+        #    f"🧩 Chunks created: {result['chunk_count']}\n"
+         #   f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
         )
 
         with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
             final, confidence, all_preds, was_tie = predict_from_chunks(result["chunks"])
 
         st.markdown(format_verdict_label(final, confidence, was_tie), unsafe_allow_html=True)
-        st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
+       # st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
 
 # Upload or record
 if option == "Upload Audio File":
