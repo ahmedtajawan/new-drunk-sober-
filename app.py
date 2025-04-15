@@ -7,13 +7,13 @@ import joblib
 import librosa
 import pandas as pd
 
-st.set_page_config(page_title="Drunk Audio Classifier", layout="centered")
-st.title("🎧 Drunk/Sober Detection")
+st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
+st.title("🎧 Drunk/Sober Audio Classifier")
 
 option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
 temp_path = None
 
-# Load model + encoder
+# Load model and encoder
 @st.cache_resource
 def load_model():
     model = joblib.load("final_voting_model_new.pkl")
@@ -22,7 +22,23 @@ def load_model():
 
 model, le = load_model()
 
-# Extract features from audio
+# Format colored verdict
+def format_verdict_label(label, confidence, was_tie):
+    if label == "DRUNK":
+        emoji = "🔴"
+        color = "red"
+    else:
+        emoji = "🟢"
+        color = "green"
+
+    text = f"<span style='color:{color}; font-weight:bold; font-size:24px'>{emoji} {label}</span><br><span style='font-size:16px'>Confidence: {confidence * 100:.2f}%</span>"
+
+    if was_tie:
+        text += "<br><span style='color:orange'>⚠️ Tie detected – confidence based on probabilities</span>"
+
+    return text
+
+# Feature extraction
 def extract_all_features(file_path):
     y, sr = librosa.load(file_path, sr=None)
     y, _ = librosa.effects.trim(y)
@@ -46,7 +62,7 @@ def extract_all_features(file_path):
 
     return pd.DataFrame([features])
 
-# Split audio into 10s chunks
+# Split into 10-sec chunks
 def split_audio(file_path, chunk_duration_sec=10):
     data, samplerate = sf.read(file_path)
     total_samples = len(data)
@@ -83,36 +99,41 @@ def split_audio(file_path, chunk_duration_sec=10):
         "last_discarded": last_discarded,
     }
 
-# Aggregate predictions across chunks
+# Predict on chunks
 def predict_from_chunks(chunk_paths):
     preds = []
-    drunk_score_total = 0.0
-    sober_score_total = 0.0
+    drunk_count = 0
+    sober_count = 0
     drunk_index = list(le.classes_).index("drunk")
     sober_index = list(le.classes_).index("sober")
+    drunk_score_total = 0.0
+    sober_score_total = 0.0
 
     for path in chunk_paths:
         features = extract_all_features(path)
-        prob = model.predict_proba(features)[0]  # Probabilities: [prob_sober, prob_drunk]
+        prob = model.predict_proba(features)[0]
         pred = model.predict(features)[0]
         label = le.inverse_transform([pred])[0]
         preds.append(label)
 
+        if label == "drunk":
+            drunk_count += 1
+        else:
+            sober_count += 1
+
         drunk_score_total += prob[drunk_index]
         sober_score_total += prob[sober_index]
-
-    drunk_count = preds.count("drunk")
-    sober_count = preds.count("sober")
 
     if drunk_count > sober_count:
         final = "DRUNK"
         confidence = drunk_count / len(preds)
-
+        was_tie = False
     elif sober_count > drunk_count:
         final = "SOBER"
         confidence = sober_count / len(preds)
-
-    else:  # Tie - Use probabilities
+        was_tie = False
+    else:
+        was_tie = True
         if drunk_score_total > sober_score_total:
             final = "DRUNK"
             confidence = drunk_score_total / (drunk_score_total + sober_score_total)
@@ -120,11 +141,9 @@ def predict_from_chunks(chunk_paths):
             final = "SOBER"
             confidence = sober_score_total / (drunk_score_total + sober_score_total)
 
-    return final, confidence, preds
+    return final, confidence, preds, was_tie
 
-
-
-# Handle upload/recording
+# Handle full flow
 def handle_audio(temp_path):
     st.audio(temp_path)
 
@@ -139,15 +158,12 @@ def handle_audio(temp_path):
         )
 
         with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
-            final, confidence, all_preds = predict_from_chunks(result["chunks"])
+            final, confidence, all_preds, was_tie = predict_from_chunks(result["chunks"])
 
-
-                
-        st.success(f"🧠 Final Verdict: **{final}**")
-        st.markdown(f"📊 Confidence Level: `{confidence * 100:.2f}%`")
+        st.markdown(format_verdict_label(final, confidence, was_tie), unsafe_allow_html=True)
         st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
 
-
+# Upload or record
 if option == "Upload Audio File":
     uploaded_file = st.file_uploader("Upload .wav or .mp3", type=["wav", "mp3"])
     if uploaded_file:
