@@ -121,7 +121,8 @@ def handle_audio(temp_path):
         )
 
         with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
-            final, all_preds = predict_from_chunks(result["chunks"])
+            final, confidence, all_preds = predict_from_chunks(result["chunks"])
+
 
                 
         st.success(f"🧠 Final Verdict: **{final}**")
