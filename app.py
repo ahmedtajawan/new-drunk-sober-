@@ -86,12 +86,20 @@ def split_audio(file_path, chunk_duration_sec=10):
 # Aggregate predictions across chunks
 def predict_from_chunks(chunk_paths):
     preds = []
+    drunk_score_total = 0.0
+    sober_score_total = 0.0
+    drunk_index = list(le.classes_).index("drunk")
+    sober_index = list(le.classes_).index("sober")
 
     for path in chunk_paths:
         features = extract_all_features(path)
+        prob = model.predict_proba(features)[0]  # Probabilities: [prob_sober, prob_drunk]
         pred = model.predict(features)[0]
         label = le.inverse_transform([pred])[0]
         preds.append(label)
+
+        drunk_score_total += prob[drunk_index]
+        sober_score_total += prob[sober_index]
 
     drunk_count = preds.count("drunk")
     sober_count = preds.count("sober")
@@ -99,11 +107,21 @@ def predict_from_chunks(chunk_paths):
     if drunk_count > sober_count:
         final = "DRUNK"
         confidence = drunk_count / len(preds)
-    else:
+
+    elif sober_count > drunk_count:
         final = "SOBER"
         confidence = sober_count / len(preds)
 
+    else:  # Tie - Use probabilities
+        if drunk_score_total > sober_score_total:
+            final = "DRUNK"
+            confidence = drunk_score_total / (drunk_score_total + sober_score_total)
+        else:
+            final = "SOBER"
+            confidence = sober_score_total / (drunk_score_total + sober_score_total)
+
     return final, confidence, preds
+
 
 
 # Handle upload/recording
