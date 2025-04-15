@@ -1,6 +1,7 @@
 import streamlit as st
 import tempfile
-from pydub import AudioSegment
+import soundfile as sf
+import numpy as np
 import os
 
 st.set_page_config(page_title="Audio Upload & Record", layout="centered")
@@ -10,15 +11,17 @@ option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Re
 temp_path = None
 
 def split_audio(file_path, chunk_duration_sec=10):
-    audio = AudioSegment.from_file(file_path)
-    duration_ms = len(audio)
-    chunk_length = chunk_duration_sec * 1000
+    data, samplerate = sf.read(file_path)
+    chunk_size = chunk_duration_sec * samplerate
+    total_chunks = int(np.ceil(len(data) / chunk_size))
     chunks = []
 
-    for i in range(0, duration_ms, chunk_length):
-        chunk = audio[i:i + chunk_length]
-        chunk_path = f"{file_path}_chunk_{i // chunk_length}.wav"
-        chunk.export(chunk_path, format="wav")
+    for i in range(total_chunks):
+        start = int(i * chunk_size)
+        end = int(min((i + 1) * chunk_size, len(data)))
+        chunk_data = data[start:end]
+        chunk_path = f"{file_path}_chunk_{i}.wav"
+        sf.write(chunk_path, chunk_data, samplerate)
         chunks.append(chunk_path)
 
     return chunks
