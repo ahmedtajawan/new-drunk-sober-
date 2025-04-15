@@ -3,13 +3,50 @@ import tempfile
 import soundfile as sf
 import numpy as np
 import os
+import joblib
+import librosa
+import pandas as pd
 
-st.set_page_config(page_title="Audio Upload & Record", layout="centered")
-st.title("🎧 Audio Input")
+st.set_page_config(page_title="Drunk Audio Classifier", layout="centered")
+st.title("🎧 Drunk/Sober Detection")
 
 option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
 temp_path = None
 
+# Load model + encoder
+@st.cache_resource
+def load_model():
+    model = joblib.load("final_voting_model_new.pkl")
+    encoder = joblib.load("label_encoder_drunk.pkl")
+    return model, encoder
+
+model, le = load_model()
+
+# Extract features from audio
+def extract_all_features(file_path):
+    y, sr = librosa.load(file_path, sr=None)
+    y, _ = librosa.effects.trim(y)
+
+    mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
+    delta = librosa.feature.delta(mfcc)
+    delta2 = librosa.feature.delta(mfcc, order=2)
+
+    features = {
+        **{f"mfcc_mean_{i}": np.mean(mfcc[i]) for i in range(13)},
+        **{f"mfcc_std_{i}": np.std(mfcc[i]) for i in range(13)},
+        **{f"delta_mean_{i}": np.mean(delta[i]) for i in range(13)},
+        **{f"delta_std_{i}": np.std(delta[i]) for i in range(13)},
+        **{f"delta2_mean_{i}": np.mean(delta2[i]) for i in range(13)},
+        **{f"delta2_std_{i}": np.std(delta2[i]) for i in range(13)},
+        "zcr": np.mean(librosa.feature.zero_crossing_rate(y)),
+        "rms": np.mean(librosa.feature.rms(y=y)),
+        "centroid": np.mean(librosa.feature.spectral_centroid(y=y, sr=sr)),
+        "tempo": librosa.beat.beat_track(y=y, sr=sr)[0],
+    }
+
+    return pd.DataFrame([features])
+
+# Split audio into 10s chunks
 def split_audio(file_path, chunk_duration_sec=10):
     data, samplerate = sf.read(file_path)
     total_samples = len(data)
@@ -46,23 +83,47 @@ def split_audio(file_path, chunk_duration_sec=10):
         "last_discarded": last_discarded,
     }
 
+# Aggregate predictions across chunks
+def predict_from_chunks(chunk_paths):
+    preds = []
+
+    for path in chunk_paths:
+        features = extract_all_features(path)
+        pred = model.predict(features)[0]
+        label = le.inverse_transform([pred])[0]
+        preds.append(label)
+
+    drunk_count = preds.count("drunk")
+    sober_count = preds.count("sober")
+    final = "DRUNK" if drunk_count > sober_count else "SOBER"
+
+    return final, preds
+
+# Handle upload/recording
+def handle_audio(temp_path):
+    st.audio(temp_path)
+
+    result = split_audio(temp_path)
+    if result["status"] == "short":
+        st.warning(f"⚠️ Audio too short: {result['duration']} seconds. Minimum 10 seconds required.")
+    else:
+        st.info(
+            f"✅ Audio duration: {result['duration']} sec\n"
+            f"🧩 Chunks created: {result['chunk_count']}\n"
+            f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
+        )
+
+        final, all_preds = predict_from_chunks(result["chunks"])
+        st.success(f"🧠 Final Verdict: **{final}**")
+        st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
+
 if option == "Upload Audio File":
     uploaded_file = st.file_uploader("Upload .wav or .mp3", type=["wav", "mp3"])
     if uploaded_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
             f.write(uploaded_file.read())
             temp_path = f.name
-        st.audio(temp_path)
-
-        result = split_audio(temp_path)
-        if result["status"] == "short":
-            st.warning(f"⚠️ Audio too short: {result['duration']} seconds. Minimum 10 seconds required.")
-        else:
-            st.info(
-                f"✅ Audio duration: {result['duration']} sec\n"
-                f"🧩 Chunks created: {result['chunk_count']}\n"
-                f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
-            )
+        handle_audio(temp_path)
 
 elif option == "Record Audio":
     st.write("🎙️ Record Audio Below")
@@ -71,14 +132,4 @@ elif option == "Record Audio":
         temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
         with open(temp_path, "wb") as f:
             f.write(audio_file.read())
-        st.audio(temp_path)
-
-        result = split_audio(temp_path)
-        if result["status"] == "short":
-            st.warning(f"⚠️ Audio too short: {result['duration']} seconds. Minimum 10 seconds required.")
-        else:
-            st.info(
-                f"✅ Audio duration: {result['duration']} sec\n"
-                f"🧩 Chunks created: {result['chunk_count']}\n"
-                f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
-            )
+        handle_audio(temp_path)
