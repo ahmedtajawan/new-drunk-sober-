@@ -113,9 +113,12 @@ def handle_audio(temp_path):
             f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
         )
 
-        final, all_preds = predict_from_chunks(result["chunks"])
+        with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
+            final, all_preds = predict_from_chunks(result["chunks"])
+
         st.success(f"🧠 Final Verdict: **{final}**")
         st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
+
 
 if option == "Upload Audio File":
     uploaded_file = st.file_uploader("Upload .wav or .mp3", type=["wav", "mp3"])
