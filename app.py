@@ -95,9 +95,16 @@ def predict_from_chunks(chunk_paths):
 
     drunk_count = preds.count("drunk")
     sober_count = preds.count("sober")
-    final = "DRUNK" if drunk_count > sober_count else "SOBER"
 
-    return final, preds
+    if drunk_count > sober_count:
+        final = "DRUNK"
+        confidence = drunk_count / len(preds)
+    else:
+        final = "SOBER"
+        confidence = sober_count / len(preds)
+
+    return final, confidence, preds
+
 
 # Handle upload/recording
 def handle_audio(temp_path):
@@ -116,7 +123,9 @@ def handle_audio(temp_path):
         with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
             final, all_preds = predict_from_chunks(result["chunks"])
 
+                
         st.success(f"🧠 Final Verdict: **{final}**")
+        st.markdown(f"📊 Confidence Level: `{confidence * 100:.2f}%`")
         st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
 
 
