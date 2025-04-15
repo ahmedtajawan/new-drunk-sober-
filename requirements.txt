@@ -1,3 +1,7 @@
 streamlit
 soundfile
+librosa
 numpy
+pandas
+joblib
+scikit-learn
