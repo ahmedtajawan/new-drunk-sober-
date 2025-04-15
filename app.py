@@ -33,8 +33,8 @@ def format_verdict_label(label, confidence, was_tie):
 
     text = f"<span style='color:{color}; font-weight:bold; font-size:24px'>{emoji} {label}</span><br><span style='font-size:16px'>Confidence: {confidence * 100:.2f}%</span>"
 
-    if was_tie:
-        text += "<br><span style='color:orange'>⚠️ Tie detected – confidence based on probabilities</span>"
+    #if was_tie:
+    #    text += "<br><span style='color:orange'>⚠️ Tie detected – confidence based on probabilities</span>"
 
     return text
 
