@@ -17,7 +17,7 @@ if option == "Upload Audio File":
 
 elif option == "Record Audio":
     st.write("🎙️ Record Audio Below")
-    audio_file = st.experimental_audio_input("Record")
+    audio_file = st.audio_input("Record")
     if audio_file:
         temp_path = tempfile.NamedTemporaryFile(delete=False, suffix=".wav").name
         with open(temp_path, "wb") as f:
