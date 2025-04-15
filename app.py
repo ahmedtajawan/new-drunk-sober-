@@ -4,7 +4,9 @@ import tempfile
 st.set_page_config(page_title="Audio Upload & Record", layout="centered")
 st.title("🎧 Audio Input")
 
-option = st.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
+# Move the radio button to the sidebar
+option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
+
 temp_path = None
 
 if option == "Upload Audio File":
