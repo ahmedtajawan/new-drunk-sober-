@@ -40,6 +40,30 @@ def format_verdict_label(label, confidence, was_tie):
     #    text += "<br><span style='color:orange'>⚠️ Tie detected – confidence based on probabilities</span>"
 
     return text
+def save_features_record(audio_name, threshold_feats, new_feats, final_label, confidence):
+    """Append extracted features + prediction to a CSV log inside Streamlit app folder."""
+    log_path = "all_uploaded_features.csv"
+
+    combined_feats = {
+        "audio_name": audio_name,
+        "final_prediction": final_label,
+        "confidence": round(confidence, 4),
+    }
+    # merge both dicts
+    combined_feats.update(threshold_feats)
+    combined_feats.update(new_feats.iloc[0].to_dict())
+
+    df_new = pd.DataFrame([combined_feats])
+
+    if os.path.exists(log_path):
+        df_existing = pd.read_csv(log_path)
+        df_combined = pd.concat([df_existing, df_new], ignore_index=True)
+    else:
+        df_combined = df_new
+
+    df_combined.to_csv(log_path, index=False)
+    return log_path
+
 
 # Feature extraction
 def extract_all_features(file_path):
@@ -324,6 +348,26 @@ def handle_audio(temp_path):
 
         st.markdown(format_verdict_label(final, confidence, was_tie), unsafe_allow_html=True)
        # st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
+        # --- Save all extracted features + prediction result ---
+        audio_name = os.path.basename(temp_path)
+        csv_path = save_features_record(audio_name, threshold_feats, new_feats, final, confidence)
+        st.success(f"✅ Features for '{audio_name}' appended to `{csv_path}`")
+        
+        # --- Optional: Show current record in sidebar ---
+        if os.path.exists(csv_path):
+            st.sidebar.subheader("📊 Feature Log")
+            df_log = pd.read_csv(csv_path)
+            st.sidebar.write(f"Total Records: {len(df_log)}")
+            if st.sidebar.button("📥 View Log"):
+                st.write("### 🧾 All Saved Audio Features")
+                st.dataframe(df_log)
+            st.sidebar.download_button(
+                "⬇️ Download CSV",
+                data=open(csv_path, "rb"),
+                file_name="all_uploaded_features.csv",
+                mime="text/csv"
+            )
+
 
 # Upload or record
 if option == "Upload Audio File":
