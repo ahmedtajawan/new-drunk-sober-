@@ -345,9 +345,15 @@ def predict_from_chunks_new_model(chunk_paths):
         df_combined = pd.DataFrame([combined_feats])
 
         # Scale and predict using the new model
+        # Reindex columns to match scaler and fill missing values
+        expected_cols = new_scaler.feature_names_in_
+        df_combined = df_combined.reindex(columns=expected_cols, fill_value=0).fillna(0)
+        
+        # Scale and predict using the new model
         X_scaled = new_scaler.transform(df_combined)
         prob = new_model.predict_proba(X_scaled)[0]
         pred = new_model.predict(X_scaled)[0]
+
         label = "DRUNK" if pred == 1 else "SOBER"
         preds.append(label)
 
@@ -385,11 +391,17 @@ def predict_with_new_model(audio_path):
     df_combined = pd.DataFrame([combined_feats])
     
     # Scale and predict
+    # Reindex columns to match scaler and fill missing values
+    expected_cols = new_scaler.feature_names_in_
+    df_combined = df_combined.reindex(columns=expected_cols, fill_value=0).fillna(0)
+    
+    # Scale and predict
     X_scaled = new_scaler.transform(df_combined)
     pred = new_model.predict(X_scaled)[0]
     prob = new_model.predict_proba(X_scaled)[0]
     label = "DRUNK" if pred == 1 else "SOBER"
     confidence = float(np.max(prob))
+
     
     return label, confidence
 
