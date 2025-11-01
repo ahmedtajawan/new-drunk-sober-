@@ -6,3 +6,6 @@ pandas
 joblib
 scikit-learn
 praat-parselmouth
+scipy
+matplotlib
+xgboost
