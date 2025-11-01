@@ -64,6 +64,90 @@ def extract_all_features(file_path):
     }
 
     return pd.DataFrame([features])
+def extract_13_features(file_path):
+    """Extract 13 new features for future ML model"""
+    import librosa
+    import numpy as np
+    import parselmouth
+    from parselmouth.praat import call
+
+    y, sr = librosa.load(file_path, sr=16000)
+    y = y - np.mean(y)
+    y, _ = librosa.effects.trim(y, top_db=25)
+    y = librosa.util.normalize(y)
+
+    # --- Spectral / RMS / Flatness / Bandwidth ---
+    S = np.abs(librosa.stft(y, n_fft=1024, hop_length=256))
+    S_db = librosa.amplitude_to_db(S, ref=np.max)
+    freqs = librosa.fft_frequencies(sr=sr, n_fft=1024)
+    low_band = (freqs >= 300) & (freqs <= 3000)
+    high_band = (freqs > 3000)
+    low_energy = np.mean(S[low_band]) if np.any(low_band) else np.nan
+    high_energy = np.mean(S[high_band]) if np.any(high_band) else np.nan
+    highfreq_ratio = high_energy / (low_energy + 1e-6)
+    flatness = float(np.mean(librosa.feature.spectral_flatness(y=y)))
+    bandwidth = float(np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)))
+    rms = float(np.mean(librosa.feature.rms(y=y)))
+
+    # --- Pause / Nucleus / Articulation ---
+    energy = librosa.feature.rms(y=y, frame_length=2048, hop_length=512)[0]
+    total = len(energy)
+    low_thr = np.percentile(energy, 10)
+    high_thr = np.percentile(energy, 75)
+    pause_percent = float(np.sum(energy < low_thr) / total * 100)
+    nucleus_percent = float(np.sum(energy > high_thr) / total * 100)
+    tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
+    articulation_rate = (tempo / 60) * 1.5
+
+    # --- VSA / Formant / Jitter / Shimmer / f0 ---
+    sound = parselmouth.Sound(file_path)
+    formant = call(sound, "To Formant (burg)", 0.01, 5, 5500, 0.025, 50)
+    n_frames = int(call(formant, "Get number of frames"))
+    F1, F2 = [], []
+    for i in range(n_frames):
+        t = call(formant, "Get time from frame number", i + 1)
+        f1 = call(formant, "Get value at time", 1, t, "Hertz", "Linear")
+        f2 = call(formant, "Get value at time", 2, t, "Hertz", "Linear")
+        if f1 > 0 and f2 > 0:
+            F1.append(f1)
+            F2.append(f2)
+    vsa = (np.nanmax(F1)-np.nanmin(F1))*(np.nanmax(F2)-np.nanmin(F2)) if len(F1)>0 else np.nan
+
+    F2 = np.array(F2)
+    if len(F2) < 3 or np.all(np.isnan(F2)):
+        F2_MAS, F2_JumpRate = np.nan, np.nan
+    else:
+        diffs = np.abs(np.diff(F2))
+        F2_MAS = float(np.nanmean(diffs))
+        F2_JumpRate = float(np.mean(diffs>100)*100)
+
+    # PointProcess for jitter/shimmer/f0
+    point_process = call(sound, "To PointProcess (periodic, cc)", 75, 500)
+    try:
+        jitter = float(call(point_process, "Get jitter (local)",0,0,0.0001,0.02,1.3))
+        shimmer = float(call([sound, point_process], "Get shimmer (local)",0,0,0.0001,0.02,1.3,1.6))
+    except:
+        jitter = shimmer = np.nan
+    mean_period = call(point_process,"Get mean period",0,0,0.0001,0.02,1.3)
+    f0 = float(1/mean_period if mean_period and mean_period>0 else np.nan)
+
+    features = {
+        "highfreq_ratio": highfreq_ratio,
+        "flatness": flatness,
+        "bandwidth": bandwidth,
+        "rms": rms,
+        "pause_percent": pause_percent,
+        "nucleus_percent": nucleus_percent,
+        "articulation_rate": articulation_rate,
+        "vsa": vsa,
+        "F2_MAS": F2_MAS,
+        "F2_JumpRate": F2_JumpRate,
+        "jitter": jitter,
+        "shimmer": shimmer,
+        "f0": f0
+    }
+
+    return pd.DataFrame([features])
 
 def extract_threshold_features(file_path):
     """Extract the 5 threshold features for a single audio file."""
@@ -219,6 +303,10 @@ def handle_audio(temp_path):
     threshold_feats = extract_threshold_features(temp_path)
     st.subheader("🧪 Threshold Features")
     st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
+    # --- Show new 13 features ---
+    new_feats = extract_13_features(temp_path)
+    st.subheader("🧩 New 13 Features")
+    st.write(new_feats.T.rename(columns={0:"Value"}))
 
     
     result = split_audio(temp_path)
