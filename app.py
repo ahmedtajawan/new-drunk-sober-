@@ -6,6 +6,9 @@ import os
 import joblib
 import librosa
 import pandas as pd
+import parselmouth
+from parselmouth.praat import call
+import wave, contextlib, math
 
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
@@ -62,6 +65,71 @@ def extract_all_features(file_path):
 
     return pd.DataFrame([features])
 
+def extract_threshold_features(file_path):
+    """Extract the 5 threshold features for a single audio file."""
+    
+    # --- VSA ---
+    try:
+        sound = parselmouth.Sound(file_path)
+        formant = call(sound, "To Formant (burg)", 0.01, 5, 5500, 0.025, 50)
+        n_frames = int(call(formant, "Get number of frames"))
+        F1, F2 = [], []
+        for i in range(n_frames):
+            t = call(formant, "Get time from frame number", i + 1)
+            f1 = call(formant, "Get value at time", 1, t, 'Hertz', 'Linear')
+            f2 = call(formant, "Get value at time", 2, t, 'Hertz', 'Linear')
+            if f1 > 0 and f2 > 0:
+                F1.append(f1)
+                F2.append(f2)
+        vsa = (np.nanmax(F1)-np.nanmin(F1)) * (np.nanmax(F2)-np.nanmin(F2)) if F1 and F2 else np.nan
+    except:
+        vsa = np.nan
+
+    # --- Load audio for RMS, flatness, bandwidth ---
+    with contextlib.closing(wave.open(file_path,'rb')) as wf:
+        sr = wf.getframerate()
+        n_channels = wf.getnchannels()
+        sampwidth = wf.getsampwidth()
+        n_frames = wf.getnframes()
+        audio_bytes = wf.readframes(n_frames)
+    dtype = {1: np.int8, 2: np.int16, 4: np.int32}.get(sampwidth)
+    audio = np.frombuffer(audio_bytes, dtype=dtype).astype(np.float32)
+    if n_channels > 1:
+        audio = audio.reshape(-1, n_channels).mean(axis=1)
+    audio = audio / (np.max(np.abs(audio)) + 1e-12)
+
+    frame_len, hop = int(0.03*sr), int(0.01*sr)
+    window = np.hamming(frame_len)
+
+    rms_list, flatness_list, bandwidth_list = [], [], []
+
+    for start in range(0, len(audio)-frame_len+1, hop):
+        frame = audio[start:start+frame_len]
+        rms = math.sqrt(np.mean(frame**2)+1e-12)
+        rms_list.append(rms)
+        fft = np.fft.rfft(frame*window)
+        mag = np.abs(fft)
+        freqs = np.fft.rfftfreq(len(frame), d=1.0/sr)
+        mag_sum = mag.sum()+1e-12
+        centroid = (freqs*mag).sum()/mag_sum
+        bw = np.sqrt(((freqs-centroid)**2*mag).sum()/mag_sum)
+        geom_mean = np.exp(np.log(mag+1e-12).mean())
+        flat = geom_mean/(mag.mean()+1e-12)
+        bandwidth_list.append(bw)
+        flatness_list.append(flat)
+
+    mean_rms = float(np.mean(rms_list))
+    std_rms = float(np.std(rms_list))
+    mean_flatness = float(np.mean(flatness_list))
+    bandwidth = float(np.mean(bandwidth_list))
+
+    return {
+        "vsa": vsa,
+        "bandwidth": bandwidth,
+        "mean_flatness": mean_flatness,
+        "mean_rms": mean_rms,
+        "std_rms": std_rms
+    }
 # Split into 10-sec chunks
 def split_audio(file_path, chunk_duration_sec=10):
     data, samplerate = sf.read(file_path)
@@ -147,6 +215,12 @@ def predict_from_chunks(chunk_paths):
 def handle_audio(temp_path):
     st.audio(temp_path)
 
+    # --- Show threshold features ---
+    threshold_feats = extract_threshold_features(temp_path)
+    st.subheader("🧪 Threshold Features")
+    st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
+
+    
     result = split_audio(temp_path)
     if result["status"] == "short":
         st.warning(f"⚠️ Audio too short: {result['duration']} seconds. Minimum 10 seconds required.")
