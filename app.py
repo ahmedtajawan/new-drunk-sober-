@@ -25,6 +25,16 @@ def load_model():
 
 model, le = load_model()
 
+# Load new model and scaler (add below your existing model)
+@st.cache_resource
+def load_new_model():
+    new_model = joblib.load("final_ensemble_model_pret_numpy.pkl")
+    new_scaler = joblib.load("scaler_pret_numpy.pkl")
+    return new_model, new_scaler
+
+new_model, new_scaler = load_new_model()
+
+
 # Format colored verdict
 def format_verdict_label(label, confidence, was_tie):
     if label == "DRUNK":
@@ -88,6 +98,8 @@ def extract_all_features(file_path):
     }
 
     return pd.DataFrame([features])
+
+
 def extract_13_features(file_path):
     """Extract 13 new features for future ML model"""
     import librosa
@@ -238,6 +250,8 @@ def extract_threshold_features(file_path):
         "mean_rms": mean_rms,
         "std_rms": std_rms
     }
+
+
 # Split into 10-sec chunks
 def split_audio(file_path, chunk_duration_sec=10):
     data, samplerate = sf.read(file_path)
@@ -318,6 +332,67 @@ def predict_from_chunks(chunk_paths):
             confidence = sober_score_total / (drunk_score_total + sober_score_total)
 
     return final, confidence, preds, was_tie
+def predict_from_chunks_new_model(chunk_paths):
+    """Predict drunk/sober using the NEW ensemble model on each chunk."""
+    preds = []
+    drunk_count = sober_count = 0
+    drunk_score_total = sober_score_total = 0.0
+
+    for path in chunk_paths:
+        threshold_feats = extract_threshold_features(path)
+        new_feats = extract_13_features(path)
+        combined_feats = {**threshold_feats, **new_feats.iloc[0].to_dict()}
+        df_combined = pd.DataFrame([combined_feats])
+
+        # Scale and predict using the new model
+        X_scaled = new_scaler.transform(df_combined)
+        prob = new_model.predict_proba(X_scaled)[0]
+        pred = new_model.predict(X_scaled)[0]
+        label = "DRUNK" if pred == 1 else "SOBER"
+        preds.append(label)
+
+        if label == "DRUNK":
+            drunk_count += 1
+            drunk_score_total += prob[1]
+        else:
+            sober_count += 1
+            sober_score_total += prob[0]
+
+    if drunk_count > sober_count:
+        final = "DRUNK"
+        confidence = drunk_count / len(preds)
+        was_tie = False
+    elif sober_count > drunk_count:
+        final = "SOBER"
+        confidence = sober_count / len(preds)
+        was_tie = False
+    else:
+        was_tie = True
+        if drunk_score_total > sober_score_total:
+            final = "DRUNK"
+            confidence = drunk_score_total / (drunk_score_total + sober_score_total)
+        else:
+            final = "SOBER"
+            confidence = sober_score_total / (drunk_score_total + sober_score_total)
+
+    return final, confidence, preds, was_tie
+
+def predict_with_new_model(audio_path):
+    """Predict drunk/sober using the new ensemble model"""
+    threshold_feats = extract_threshold_features(audio_path)
+    new_feats = extract_13_features(audio_path)
+    combined_feats = {**threshold_feats, **new_feats.iloc[0].to_dict()}
+    df_combined = pd.DataFrame([combined_feats])
+    
+    # Scale and predict
+    X_scaled = new_scaler.transform(df_combined)
+    pred = new_model.predict(X_scaled)[0]
+    prob = new_model.predict_proba(X_scaled)[0]
+    label = "DRUNK" if pred == 1 else "SOBER"
+    confidence = float(np.max(prob))
+    
+    return label, confidence
+
 
 # Handle full flow
 def handle_audio(temp_path):
@@ -347,7 +422,19 @@ def handle_audio(temp_path):
             final, confidence, all_preds, was_tie = predict_from_chunks(result["chunks"])
 
         st.markdown(format_verdict_label(final, confidence, was_tie), unsafe_allow_html=True)
+
+        
        # st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
+      # --- Run the new ensemble model (chunk-based) ---
+        with st.spinner("🧠 Running ensemble model on chunks..."):
+            new_final, new_confidence, new_preds, new_tie = predict_from_chunks_new_model(result["chunks"])
+        
+        st.markdown("### 🧠 Ensemble Model (Chunk-based) Prediction")
+        st.markdown(format_verdict_label(new_final, new_confidence, new_tie), unsafe_allow_html=True)
+        
+                 
+
+        
         # --- Save all extracted features + prediction result ---
         audio_name = os.path.basename(temp_path)
         csv_path = save_features_record(audio_name, threshold_feats, new_feats, final, confidence)
