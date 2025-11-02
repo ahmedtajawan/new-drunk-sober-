@@ -656,8 +656,44 @@ def handle_audio(temp_path):
         
   # --- Show threshold features ---
         threshold_feats = extract_threshold_features(temp_path)
-        st.subheader("🧪 Threshold Features")
-        st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
+        # --- Show threshold features with explanation ---
+        threshold_feats = extract_threshold_features(temp_path)
+        
+        # Define the thresholds & direction
+        threshold_definitions = {
+            "vsa": {"threshold": 5.99e6, "direction": "below triggers DRUNK"},
+            "mean_flatness": {"threshold": 0.449, "direction": "above triggers DRUNK"},
+            "bandwidth": {"threshold": 1849, "direction": "above triggers DRUNK"},
+            "mean_rms": {"threshold": 0.0579, "direction": "below triggers DRUNK"},
+            "std_rms": {"threshold": 0.0512, "direction": "above triggers DRUNK"}
+        }
+        
+        # Prepare detailed table
+        detailed_data = []
+        for feat, val in threshold_feats.items():
+            thresh_info = threshold_definitions.get(feat, {})
+            threshold_val = thresh_info.get("threshold", np.nan)
+            direction = thresh_info.get("direction", "")
+            
+            # Determine if this feature triggered DRUNK
+            if "below" in direction:
+                triggered = val < threshold_val
+            elif "above" in direction:
+                triggered = val > threshold_val
+            else:
+                triggered = False
+            
+            detailed_data.append({
+                "Feature": feat,
+                "Value": val,
+                "Threshold": threshold_val,
+                "Direction": direction,
+                "Triggered DRUNK?": "✅" if triggered else "❌"
+            })
+        
+        st.subheader("🧪 Threshold Features (with trigger explanation)")
+        st.dataframe(pd.DataFrame(detailed_data))
+
         # --- Show new 13 features ---
         #new_feats = extract_13_features(temp_path)
         #st.subheader("🧩 New 13 Features")
