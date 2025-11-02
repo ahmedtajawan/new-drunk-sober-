@@ -424,7 +424,7 @@ def predict_drunk_sober_threshold(chunk_paths):
             drunk_score += 1 if std_rms > thresholds['std_rms'] else 0
 
             # Decide label for this chunk
-            label = "DRUNK" if drunk_score >= 3 else "SOBER"
+            label = "DRUNK" if drunk_score >= 2 else "SOBER"
             confidence = drunk_score / 5.0  # crude confidence (0–1)
 
             all_chunk_results.append({
