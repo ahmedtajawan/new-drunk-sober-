@@ -495,7 +495,7 @@ def handle_audio(temp_path):
         
                  # --- Run threshold-based rule system (chunk-based) ---
         with st.spinner("📏 Running threshold-based system on chunks..."):
-            th_final, th_conf, th_preds, th_tie = predict_from_chunks_threshold_system(result["chunks"])
+            th_final, th_conf, th_preds, th_tie = predict_drunk_sober_threshold(result["chunks"])
         
         st.markdown("### 📏 Threshold-Based System (Chunk-based)")
         st.markdown(format_verdict_label(th_final, th_conf, was_tie=th_tie), unsafe_allow_html=True)
