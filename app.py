@@ -9,6 +9,7 @@ import pandas as pd
 import parselmouth
 from parselmouth.praat import call
 import wave, contextlib, math
+from pydub import AudioSegment
 
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
@@ -536,9 +537,17 @@ def handle_audio(temp_path):
 # Upload or record
 if option == "Upload Audio File":
     uploaded_file = st.file_uploader("Upload .wav or .mp3", type=["wav", "mp3"])
+   
     if uploaded_file:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-            f.write(uploaded_file.read())
+            file_bytes = uploaded_file.read()
+    
+            if uploaded_file.name.lower().endswith(".mp3"):
+                audio = AudioSegment.from_file(io.BytesIO(file_bytes), format="mp3")
+                audio.export(f.name, format="wav")
+            else:
+                f.write(file_bytes)
+    
             temp_path = f.name
         handle_audio(temp_path)
 
