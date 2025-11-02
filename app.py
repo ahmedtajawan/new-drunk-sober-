@@ -474,6 +474,42 @@ def predict_drunk_sober_threshold(chunk_paths):
 
     return final, confidence, all_chunk_results, was_tie
 
+# -------------------------------
+# Best calibration constants
+BEST_ML_CONF_THRESH = 0.6   # Use ML prediction directly if confidence > this
+BEST_RULE_SCALE = 0.9       # Scale threshold rules (optional, used inside compute if needed)
+BEST_ML_WEIGHT = 0.7        # Weight given to ML prediction vs. rule system
+# -------------------------------
+
+def compute_hybrid_new_vs_threshold(new_final, new_confidence, th_final):
+    """
+    Combines the new ML ensemble model and the threshold-based system
+    into a final hybrid verdict using best calibration.
+    """
+
+    # Convert labels to 0/1
+    new_val = 1 if new_final == "DRUNK" else 0
+    th_val  = 1 if th_final == "DRUNK" else 0
+
+    # Apply rule scale if needed (simplified: th_val already aggregated)
+    rule_scaled_val = th_val * BEST_RULE_SCALE
+
+    # Hybrid score: weighted combination
+    hybrid_score = BEST_ML_WEIGHT * new_val + (1 - BEST_ML_WEIGHT) * rule_scaled_val
+
+    # Optional override: if ML confidence is very high, use ML
+    if new_confidence > BEST_ML_CONF_THRESH:
+        hybrid_final_val = new_val
+    else:
+        hybrid_final_val = 1 if hybrid_score > 0.5 else 0
+
+    # Final label & confidence
+    hybrid_label = "DRUNK" if hybrid_final_val == 1 else "SOBER"
+    hybrid_conf = hybrid_score if hybrid_final_val == 1 else 1 - hybrid_score
+
+    return hybrid_label, hybrid_conf
+
+
 # Handle full flow
 def handle_audio(temp_path):
     st.audio(temp_path)
@@ -522,7 +558,19 @@ def handle_audio(temp_path):
         new_feats = extract_13_features(temp_path)
         st.subheader("🧩 New 13 Features")
         st.write(new_feats.T.rename(columns={0:"Value"}))
-    
+
+
+                # --- Run hybrid combination only on new model + threshold ---
+        hybrid_label, hybrid_conf = compute_hybrid_new_vs_threshold(
+            new_final=new_final,
+            new_confidence=new_confidence,
+            th_final=th_final
+        )
+        
+        # Display hybrid verdict
+        st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold)")
+        st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
+
         
         
         # --- Save all extracted features + prediction result ---
