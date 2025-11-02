@@ -377,6 +377,38 @@ def predict_from_chunks_new_model(chunk_paths):
         confidence *= 0.9
 
     return final, confidence, preds, was_tie
+def predict_from_threshold_system(file_path):
+    thresholds = {
+        'vsa': 5.99e6,
+        'mean_flatness': 0.449,
+        'bandwidth': 1849,
+        'mean_rms': 0.0579,
+        'std_rms': 0.0512
+    }
+
+    feats = extract_threshold_features(file_path)
+    rule_votes = {}
+
+    rule_votes["vsa"] = feats["vsa"] < thresholds["vsa"]
+    rule_votes["mean_flatness"] = feats["mean_flatness"] > thresholds["mean_flatness"]
+    rule_votes["bandwidth"] = feats["bandwidth"] < thresholds["bandwidth"]
+    rule_votes["mean_rms"] = feats["mean_rms"] < thresholds["mean_rms"]
+    rule_votes["std_rms"] = feats["std_rms"] < thresholds["std_rms"]
+
+    drunk_votes = sum(rule_votes.values())
+    sober_votes = len(rule_votes) - drunk_votes
+
+    if drunk_votes > sober_votes:
+        label = "DRUNK"
+        confidence = drunk_votes / len(rule_votes)
+    elif sober_votes > drunk_votes:
+        label = "SOBER"
+        confidence = sober_votes / len(rule_votes)
+    else:
+        label = "SOBER"  # Tie → default sober
+        confidence = 0.5
+
+    return label, confidence, rule_votes
 
 
 def predict_from_chunks_threshold_system(chunk_paths):
