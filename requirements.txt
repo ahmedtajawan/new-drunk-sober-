@@ -9,3 +9,4 @@ praat-parselmouth
 scipy
 matplotlib
 xgboost
+pydub
