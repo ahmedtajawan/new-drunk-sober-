@@ -377,7 +377,18 @@ def predict_from_chunks_new_model(chunk_paths):
         confidence *= 0.9
 
     return final, confidence, preds, was_tie
-def predict_from_threshold_system(file_path):
+
+
+import numpy as np
+import librosa
+
+def predict_drunk_sober_threshold(audio_file_path, chunk_duration=10, sr=16000):
+    """
+    Chunk-based threshold drunk/sober predictor.
+    Uses user's thresholds for: vsa, mean_flatness, bandwidth, mean_rms, std_rms.
+    """
+
+    # ---- USER DEFINED THRESHOLDS ----
     thresholds = {
         'vsa': 5.99e6,
         'mean_flatness': 0.449,
@@ -385,73 +396,72 @@ def predict_from_threshold_system(file_path):
         'mean_rms': 0.0579,
         'std_rms': 0.0512
     }
+    # ---------------------------------
 
-    feats = extract_threshold_features(file_path)
-    rule_votes = {}
+    # Load audio
+    y, sr = librosa.load(audio_file_path, sr=sr)
+    total_duration = librosa.get_duration(y=y, sr=sr)
 
-    rule_votes["vsa"] = feats["vsa"] < thresholds["vsa"]
-    rule_votes["mean_flatness"] = feats["mean_flatness"] > thresholds["mean_flatness"]
-    rule_votes["bandwidth"] = feats["bandwidth"] < thresholds["bandwidth"]
-    rule_votes["mean_rms"] = feats["mean_rms"] < thresholds["mean_rms"]
-    rule_votes["std_rms"] = feats["std_rms"] < thresholds["std_rms"]
+    # Chunk parameters
+    chunk_size = int(chunk_duration * sr)
+    num_chunks = int(np.ceil(len(y) / chunk_size))
 
-    drunk_votes = sum(rule_votes.values())
-    sober_votes = len(rule_votes) - drunk_votes
+    chunk_predictions = []
+    all_features = []
 
-    if drunk_votes > sober_votes:
-        label = "DRUNK"
-        confidence = drunk_votes / len(rule_votes)
-    elif sober_votes > drunk_votes:
-        label = "SOBER"
-        confidence = sober_votes / len(rule_votes)
-    else:
-        label = "SOBER"  # Tie → default sober
-        confidence = 0.5
+    # Process each chunk
+    for i in range(num_chunks):
+        start = i * chunk_size
+        end = min((i + 1) * chunk_size, len(y))
+        chunk = y[start:end]
 
-    return label, confidence, rule_votes
+        if len(chunk) < sr * 0.5:  # Skip very short chunks (<0.5s)
+            continue
 
+        # --- FEATURE EXTRACTION ---
+        S = np.abs(librosa.stft(chunk))
+        spectral_flatness = np.mean(librosa.feature.spectral_flatness(S=S))
+        bandwidth = np.mean(librosa.feature.spectral_bandwidth(y=chunk, sr=sr))
+        rms = librosa.feature.rms(y=chunk)[0]
+        mean_rms = np.mean(rms)
+        std_rms = np.std(rms)
 
-def predict_from_chunks_threshold_system(chunk_paths):
-    """Apply threshold-based rules to each audio chunk, then aggregate results."""
-    preds = []
-    drunk_count = sober_count = 0
-    drunk_conf_total = sober_conf_total = 0.0
+        # VSA (Voice Segment Area) approximation = sum of RMS * bandwidth
+        vsa = np.sum(rms) * bandwidth
 
-    for path in chunk_paths:
-        # Run threshold rules on each chunk
-        final, conf, rule_votes = predict_from_threshold_system(path)
-        preds.append(final)
+        features = {
+            'vsa': vsa,
+            'mean_flatness': spectral_flatness,
+            'bandwidth': bandwidth,
+            'mean_rms': mean_rms,
+            'std_rms': std_rms
+        }
+        all_features.append(features)
 
-        if final == "DRUNK":
-            drunk_count += 1
-            drunk_conf_total += conf
-        else:
-            sober_count += 1
-            sober_conf_total += conf
+        # --- THRESHOLD LOGIC ---
+        drunk_score = 0
+        drunk_score += 1 if vsa < thresholds['vsa'] else 0
+        drunk_score += 1 if spectral_flatness > thresholds['mean_flatness'] else 0
+        drunk_score += 1 if bandwidth < thresholds['bandwidth'] else 0
+        drunk_score += 1 if mean_rms < thresholds['mean_rms'] else 0
+        drunk_score += 1 if std_rms > thresholds['std_rms'] else 0
 
-    # --- Aggregate results ---
-    total_chunks = len(preds)
-    if total_chunks == 0:
-        return "UNKNOWN", 0.0, preds, True  # safety fallback
+        label = "Drunk" if drunk_score >= 3 else "Sober"
+        chunk_predictions.append(label)
 
-    avg_drunk_conf = drunk_conf_total / total_chunks
-    avg_sober_conf = sober_conf_total / total_chunks
+    # --- FINAL DECISION ---
+    drunk_ratio = chunk_predictions.count("Drunk") / len(chunk_predictions)
+    final_label = "Drunk" if drunk_ratio >= 0.5 else "Sober"
 
-    if drunk_count > sober_count:
-        final = "DRUNK"
-        confidence = avg_drunk_conf
-        was_tie = False
-    elif sober_count > drunk_count:
-        final = "SOBER"
-        confidence = avg_sober_conf
-        was_tie = False
-    else:
-        # Tie → use average of both confidences
-        was_tie = True
-        final = "DRUNK" if avg_drunk_conf > avg_sober_conf else "SOBER"
-        confidence = (avg_drunk_conf + avg_sober_conf) / 2
+    return {
+        "final_label": final_label,
+        "chunk_predictions": chunk_predictions,
+        "drunk_ratio": drunk_ratio,
+        "features": all_features,
+        "total_chunks": len(chunk_predictions),
+        "thresholds_used": thresholds
+    }
 
-    return final, confidence, preds, was_tie
 
 # Handle full flow
 def handle_audio(temp_path):
