@@ -10,6 +10,8 @@ import parselmouth
 from parselmouth.praat import call
 import wave, contextlib, math
 from pydub import AudioSegment
+import io
+
 
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
