@@ -703,9 +703,7 @@ def handle_audio(temp_path):
         #st.subheader("🧩 New 13 Features")
         #st.write(new_feats.T.rename(columns={0:"Value"}))
         
-        # Display hybrid verdict
-        st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold, Equal Share)")
-        st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
+    
 
         
         
