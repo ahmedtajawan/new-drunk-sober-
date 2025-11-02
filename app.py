@@ -589,29 +589,29 @@ def handle_audio(temp_path):
     else:
         st.info(
             f"✅ Audio duration: {result['duration']} sec\n"
-        #    f"🧩 Chunks created: {result['chunk_count']}\n"
-         #   f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
+            f"🧩 Chunks created: {result['chunk_count']}\n"
+            f"🗑️ Last chunk discarded: {'Yes' if result['last_discarded'] else 'No'}"
         )
 
         with st.spinner("🔍 Analyzing audio... This might take a few seconds."):
             final, confidence, all_preds, was_tie = predict_from_chunks(result["chunks"])
-
+        st.markdown("### 🧠 Old Model (Chunk-based) Prediction")
         st.markdown(format_verdict_label(final, confidence, was_tie), unsafe_allow_html=True)
 
         
        # st.markdown(f"🎯 Chunk-wise Prediction: `{all_preds}`")
       # --- Run the new ensemble model (chunk-based) ---
-        with st.spinner("🧠 Running ensemble model on chunks..."):
+        with st.spinner("🧠 New model on chunks..."):
             new_final, new_confidence, new_preds, new_tie = predict_from_chunks_new_model(result["chunks"])
         
-        st.markdown("### 🧠 Ensemble Model (Chunk-based) Prediction")
+        st.markdown("### 🧠 New Model (Chunk-based) Prediction")
         st.markdown(format_verdict_label(new_final, new_confidence, new_tie), unsafe_allow_html=True)
         
                  # --- Run threshold-based rule system (chunk-based) ---
         with st.spinner("📏 Running threshold-based system on chunks..."):
             th_final, th_conf, th_preds, th_tie = predict_drunk_sober_threshold(result["chunks"])
         
-        st.markdown("### 📏 Threshold-Based System (Chunk-based)")
+        st.markdown("### 📏 Threshold-Based System (Chunk-based) Prediction")
         st.markdown(format_verdict_label(th_final, th_conf, was_tie=th_tie), unsafe_allow_html=True)
         
         # Show quick chunk summary
@@ -630,7 +630,7 @@ def handle_audio(temp_path):
         )
 
         # Display hybrid verdict
-        st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold)")
+        st.markdown("### 🔗 weighted (70 30) Hybrid Verdict (New Model + Threshold)")
         st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
 
         # --- Run hybrid equal combination only on new model + threshold ---
@@ -640,7 +640,9 @@ def handle_audio(temp_path):
             th_final=th_final,
             th_conf=th_conf
         )
-
+        # Display hybrid verdict
+        st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold, Equal Share)")
+        st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
 
         # --- 3-way hybrid combining old ML, new ML, threshold ---
         threeway_label, threeway_conf = compute_hybrid_all_three(
@@ -653,6 +655,8 @@ def handle_audio(temp_path):
         st.markdown(format_verdict_label(threeway_label, threeway_conf, was_tie=False), unsafe_allow_html=True)
 
 
+        
+        
         
   # --- Show threshold features ---
         threshold_feats = extract_threshold_features(temp_path)
