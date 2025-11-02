@@ -34,9 +34,8 @@ def load_new_model():
 
 new_model, new_scaler = load_new_model()
 
-
-# Format colored verdict
 def format_verdict_label(label, confidence, was_tie):
+    """Format verdict with color, emoji, confidence, and optional tie warning."""
     if label == "DRUNK":
         emoji = "🔴"
         color = "red"
@@ -44,10 +43,14 @@ def format_verdict_label(label, confidence, was_tie):
         emoji = "🟢"
         color = "green"
 
-    text = f"<span style='color:{color}; font-weight:bold; font-size:24px'>{emoji} {label}</span><br><span style='font-size:16px'>Confidence: {confidence * 100:.2f}%</span>"
+    text = f"<span style='color:{color}; font-weight:bold; font-size:24px'>{emoji} {label}</span><br>"
+    text += f"<span style='font-size:16px'>Confidence: {confidence * 100:.2f}%</span>"
 
-    #if was_tie:
-    #    text += "<br><span style='color:orange'>⚠️ Tie detected – confidence based on probabilities</span>"
+    if was_tie:
+        text += "<br><span style='color:orange; font-weight:bold'>⚠️ Tie detected – confidence based on probabilities</span>"
+
+    return text
+
 
     return text
 def save_features_record(audio_name, threshold_feats, new_feats, final_label, confidence):
@@ -288,16 +291,17 @@ def split_audio(file_path, chunk_duration_sec=10):
         "chunk_count": len(chunks),
         "last_discarded": last_discarded,
     }
+import numpy as np
 
-# Predict on chunks
 def predict_from_chunks(chunk_paths):
+    """Predict drunk/sober using the old model on each chunk, with average probability and tie handling."""
     preds = []
-    drunk_count = 0
-    sober_count = 0
     drunk_index = list(le.classes_).index("drunk")
     sober_index = list(le.classes_).index("sober")
-    drunk_score_total = 0.0
-    sober_score_total = 0.0
+    
+    # accumulate per-chunk probabilities
+    drunk_probs = []
+    sober_probs = []
 
     for path in chunk_paths:
         features = extract_all_features(path)
@@ -306,37 +310,34 @@ def predict_from_chunks(chunk_paths):
         label = le.inverse_transform([pred])[0]
         preds.append(label)
 
-        if label == "drunk":
-            drunk_count += 1
-        else:
-            sober_count += 1
+        drunk_probs.append(prob[drunk_index])
+        sober_probs.append(prob[sober_index])
 
-        drunk_score_total += prob[drunk_index]
-        sober_score_total += prob[sober_index]
+    # average probabilities
+    avg_drunk_prob = np.mean(drunk_probs)
+    avg_sober_prob = np.mean(sober_probs)
 
-    if drunk_count > sober_count:
-        final = "DRUNK"
-        confidence = drunk_count / len(preds)
-        was_tie = False
-    elif sober_count > drunk_count:
-        final = "SOBER"
-        confidence = sober_count / len(preds)
-        was_tie = False
-    else:
-        was_tie = True
-        if drunk_score_total > sober_score_total:
-            final = "DRUNK"
-            confidence = drunk_score_total / (drunk_score_total + sober_score_total)
-        else:
-            final = "SOBER"
-            confidence = sober_score_total / (drunk_score_total + sober_score_total)
+    # tie handling: consider as tie if probabilities are close
+    diff = abs(avg_drunk_prob - avg_sober_prob)
+    tie_threshold = 0.05  # you can adjust this
+    was_tie = diff <= tie_threshold
+
+    # determine final label
+    final = "DRUNK" if avg_drunk_prob > avg_sober_prob else "SOBER"
+    confidence = max(avg_drunk_prob, avg_sober_prob)
+
+    # if tie, reduce confidence slightly to reflect uncertainty
+    if was_tie:
+        confidence *= 0.9
 
     return final, confidence, preds, was_tie
+
+
 def predict_from_chunks_new_model(chunk_paths):
-    """Predict drunk/sober using the NEW ensemble model on each chunk."""
+    """Predict drunk/sober using the new ensemble model on each chunk, with average probability and tie handling."""
     preds = []
-    drunk_count = sober_count = 0
-    drunk_score_total = sober_score_total = 0.0
+    drunk_probs = []
+    sober_probs = []
 
     for path in chunk_paths:
         threshold_feats = extract_threshold_features(path)
@@ -344,12 +345,11 @@ def predict_from_chunks_new_model(chunk_paths):
         combined_feats = {**threshold_feats, **new_feats.iloc[0].to_dict()}
         df_combined = pd.DataFrame([combined_feats])
 
-        # Scale and predict using the new model
         # Reindex columns to match scaler and fill missing values
         expected_cols = new_scaler.feature_names_in_
         df_combined = df_combined.reindex(columns=expected_cols, fill_value=0).fillna(0)
         
-        # Scale and predict using the new model
+        # Scale and predict
         X_scaled = new_scaler.transform(df_combined)
         prob = new_model.predict_proba(X_scaled)[0]
         pred = new_model.predict(X_scaled)[0]
@@ -357,53 +357,24 @@ def predict_from_chunks_new_model(chunk_paths):
         label = "DRUNK" if pred == 1 else "SOBER"
         preds.append(label)
 
-        if label == "DRUNK":
-            drunk_count += 1
-            drunk_score_total += prob[1]
-        else:
-            sober_count += 1
-            sober_score_total += prob[0]
+        drunk_probs.append(prob[1])
+        sober_probs.append(prob[0])
 
-    if drunk_count > sober_count:
-        final = "DRUNK"
-        confidence = drunk_count / len(preds)
-        was_tie = False
-    elif sober_count > drunk_count:
-        final = "SOBER"
-        confidence = sober_count / len(preds)
-        was_tie = False
-    else:
-        was_tie = True
-        if drunk_score_total > sober_score_total:
-            final = "DRUNK"
-            confidence = drunk_score_total / (drunk_score_total + sober_score_total)
-        else:
-            final = "SOBER"
-            confidence = sober_score_total / (drunk_score_total + sober_score_total)
+    # average probabilities
+    avg_drunk_prob = np.mean(drunk_probs)
+    avg_sober_prob = np.mean(sober_probs)
+
+    # tie handling
+    diff = abs(avg_drunk_prob - avg_sober_prob)
+    tie_threshold = 0.05
+    was_tie = diff <= tie_threshold
+
+    final = "DRUNK" if avg_drunk_prob > avg_sober_prob else "SOBER"
+    confidence = max(avg_drunk_prob, avg_sober_prob)
+    if was_tie:
+        confidence *= 0.9
 
     return final, confidence, preds, was_tie
-
-def predict_with_new_model(audio_path):
-    """Predict drunk/sober using the new ensemble model"""
-    threshold_feats = extract_threshold_features(audio_path)
-    new_feats = extract_13_features(audio_path)
-    combined_feats = {**threshold_feats, **new_feats.iloc[0].to_dict()}
-    df_combined = pd.DataFrame([combined_feats])
-    
-    # Scale and predict
-    # Reindex columns to match scaler and fill missing values
-    expected_cols = new_scaler.feature_names_in_
-    df_combined = df_combined.reindex(columns=expected_cols, fill_value=0).fillna(0)
-    
-    # Scale and predict
-    X_scaled = new_scaler.transform(df_combined)
-    pred = new_model.predict(X_scaled)[0]
-    prob = new_model.predict_proba(X_scaled)[0]
-    label = "DRUNK" if pred == 1 else "SOBER"
-    confidence = float(np.max(prob))
-
-    
-    return label, confidence
 
 
 # Handle full flow
