@@ -379,8 +379,6 @@ def predict_from_chunks_new_model(chunk_paths):
     return final, confidence, preds, was_tie
 
 
-import numpy as np
-import librosa
 
 def predict_drunk_sober_threshold(audio_file_path, chunk_duration=10, sr=16000):
     """
@@ -467,15 +465,6 @@ def predict_drunk_sober_threshold(audio_file_path, chunk_duration=10, sr=16000):
 def handle_audio(temp_path):
     st.audio(temp_path)
 
-    # --- Show threshold features ---
-    threshold_feats = extract_threshold_features(temp_path)
-    st.subheader("🧪 Threshold Features")
-    st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
-    # --- Show new 13 features ---
-    new_feats = extract_13_features(temp_path)
-    st.subheader("🧩 New 13 Features")
-    st.write(new_feats.T.rename(columns={0:"Value"}))
-
     
     result = split_audio(temp_path)
     if result["status"] == "short":
@@ -512,7 +501,16 @@ def handle_audio(temp_path):
         st.write(f"🧩 Chunks analyzed: {len(th_preds)}")
         st.write(f"🔴 Drunk chunks: {th_preds.count('DRUNK')} | 🟢 Sober chunks: {th_preds.count('SOBER')}")
 
-
+            # --- Show threshold features ---
+        threshold_feats = extract_threshold_features(temp_path)
+        st.subheader("🧪 Threshold Features")
+        st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
+        # --- Show new 13 features ---
+        new_feats = extract_13_features(temp_path)
+        st.subheader("🧩 New 13 Features")
+        st.write(new_feats.T.rename(columns={0:"Value"}))
+    
+        
         
         # --- Save all extracted features + prediction result ---
         audio_name = os.path.basename(temp_path)
