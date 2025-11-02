@@ -664,7 +664,7 @@ def handle_audio(temp_path):
             "vsa": {"threshold": 5.99e6, "direction": "below triggers DRUNK"},
             "mean_flatness": {"threshold": 0.449, "direction": "above triggers DRUNK"},
             "bandwidth": {"threshold": 1849, "direction": "above triggers DRUNK"},
-            "mean_rms": {"threshold": 0.0579, "direction": "below triggers DRUNK"},
+            "mean_rms": {"threshold": 0.0579, "direction": "above triggers DRUNK"},
             "std_rms": {"threshold": 0.0512, "direction": "above triggers DRUNK"}
         }
         
