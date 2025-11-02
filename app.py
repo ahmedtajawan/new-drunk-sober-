@@ -668,24 +668,8 @@ def handle_audio(temp_path):
         st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
 
         
-        # --- Save all extracted features + prediction result ---
-        audio_name = os.path.basename(temp_path)
-        csv_path = save_features_record(audio_name, threshold_feats, new_feats, final, confidence)
-        st.success(f"✅ Features for '{audio_name}' appended to `{csv_path}`")
         
-        # --- Optional: Show current record in sidebar ---
-        if os.path.exists(csv_path):
-            st.sidebar.subheader("📊 Feature Log")
-            df_log = pd.read_csv(csv_path)
-            st.sidebar.write(f"Total Records: {len(df_log)}")
-            if st.sidebar.button("📥 View Log"):
-                st.write("### 🧾 All Saved Audio Features")
-                st.dataframe(df_log)
-            st.sidebar.download_button(
-                "⬇️ Download CSV",
-                data=open(csv_path, "rb"),
-                file_name="all_uploaded_features.csv",
-                mime="text/csv"
+        
             )
 
 
