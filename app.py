@@ -53,6 +53,8 @@ def format_verdict_label(label, confidence, was_tie):
 
 
     return text
+
+
 def save_features_record(audio_name, threshold_feats, new_feats, final_label, confidence):
     """Append extracted features + prediction to a CSV log inside Streamlit app folder."""
     log_path = "all_uploaded_features.csv"
@@ -377,6 +379,48 @@ def predict_from_chunks_new_model(chunk_paths):
     return final, confidence, preds, was_tie
 
 
+def predict_from_chunks_threshold_system(chunk_paths):
+    """Apply threshold-based rules to each audio chunk, then aggregate results."""
+    preds = []
+    drunk_count = sober_count = 0
+    drunk_conf_total = sober_conf_total = 0.0
+
+    for path in chunk_paths:
+        # Run threshold rules on each chunk
+        final, conf, rule_votes = predict_from_threshold_system(path)
+        preds.append(final)
+
+        if final == "DRUNK":
+            drunk_count += 1
+            drunk_conf_total += conf
+        else:
+            sober_count += 1
+            sober_conf_total += conf
+
+    # --- Aggregate results ---
+    total_chunks = len(preds)
+    if total_chunks == 0:
+        return "UNKNOWN", 0.0, preds, True  # safety fallback
+
+    avg_drunk_conf = drunk_conf_total / total_chunks
+    avg_sober_conf = sober_conf_total / total_chunks
+
+    if drunk_count > sober_count:
+        final = "DRUNK"
+        confidence = avg_drunk_conf
+        was_tie = False
+    elif sober_count > drunk_count:
+        final = "SOBER"
+        confidence = avg_sober_conf
+        was_tie = False
+    else:
+        # Tie → use average of both confidences
+        was_tie = True
+        final = "DRUNK" if avg_drunk_conf > avg_sober_conf else "SOBER"
+        confidence = (avg_drunk_conf + avg_sober_conf) / 2
+
+    return final, confidence, preds, was_tie
+
 # Handle full flow
 def handle_audio(temp_path):
     st.audio(temp_path)
@@ -415,7 +459,17 @@ def handle_audio(temp_path):
         st.markdown("### 🧠 Ensemble Model (Chunk-based) Prediction")
         st.markdown(format_verdict_label(new_final, new_confidence, new_tie), unsafe_allow_html=True)
         
-                 
+                 # --- Run threshold-based rule system (chunk-based) ---
+        with st.spinner("📏 Running threshold-based system on chunks..."):
+            th_final, th_conf, th_preds, th_tie = predict_from_chunks_threshold_system(result["chunks"])
+        
+        st.markdown("### 📏 Threshold-Based System (Chunk-based)")
+        st.markdown(format_verdict_label(th_final, th_conf, was_tie=th_tie), unsafe_allow_html=True)
+        
+        # Show quick chunk summary
+        st.write(f"🧩 Chunks analyzed: {len(th_preds)}")
+        st.write(f"🔴 Drunk chunks: {th_preds.count('DRUNK')} | 🟢 Sober chunks: {th_preds.count('SOBER')}")
+
 
         
         # --- Save all extracted features + prediction result ---
