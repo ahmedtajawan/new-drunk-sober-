@@ -478,7 +478,7 @@ def predict_drunk_sober_threshold(chunk_paths):
 # Best calibration constants
 BEST_ML_CONF_THRESH = 0.6   # Use ML prediction directly if confidence > this
 BEST_RULE_SCALE = 0.9       # Scale threshold rules (optional, used inside compute if needed)
-BEST_ML_WEIGHT = 0.7        # Weight given to ML prediction vs. rule system
+BEST_ML_WEIGHT = 0.3        # Weight given to ML prediction vs. rule system
 # -------------------------------
 def compute_hybrid_new_vs_threshold(new_final, new_confidence, th_final, th_conf):
     """
