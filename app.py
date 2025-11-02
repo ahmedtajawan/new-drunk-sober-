@@ -548,7 +548,7 @@ def computeEqual_hybrid_new_vs_threshold(new_final, new_confidence, th_final, th
     return hybrid_label, hybrid_conf
 
 def compute_hybrid_all_three(old_final, old_conf, new_final, new_conf, th_final, th_conf,
-                             w_old=0.3, w_new=0.4, w_th=0.3):
+                             w_old=0.333, w_new=0.333, w_th=0.3333):
     """
     Combine old ML, new ML, and threshold system using weighted probabilities.
 
