@@ -480,37 +480,73 @@ BEST_ML_CONF_THRESH = 0.6   # Use ML prediction directly if confidence > this
 BEST_RULE_SCALE = 0.9       # Scale threshold rules (optional, used inside compute if needed)
 BEST_ML_WEIGHT = 0.7        # Weight given to ML prediction vs. rule system
 # -------------------------------
-
-def compute_hybrid_new_vs_threshold(new_final, new_confidence, th_final):
+def compute_hybrid_new_vs_threshold(new_final, new_confidence, th_final, th_conf):
     """
     Combines the new ML ensemble model and the threshold-based system
-    into a final hybrid verdict using best calibration.
+    into a final hybrid verdict using best calibration (weighted).
+    
+    Args:
+        new_final (str): "DRUNK"/"SOBER" from new model
+        new_confidence (float): ML probability/confidence (0–1)
+        th_final (str): "DRUNK"/"SOBER" from threshold system
+        th_conf (float): Threshold system probability/confidence (0–1)
+        
+    Returns:
+        hybrid_label (str), hybrid_conf (float)
     """
 
-    # Convert labels to 0/1
-    new_val = 1 if new_final == "DRUNK" else 0
-    th_val  = 1 if th_final == "DRUNK" else 0
+    # Convert to DRUNK probabilities
+    new_prob_drunk = new_confidence if new_final == "DRUNK" else 1 - new_confidence
+    th_prob_drunk  = th_conf if th_final == "DRUNK" else 1 - th_conf
 
-    # Apply rule scale if needed (simplified: th_val already aggregated)
-    rule_scaled_val = th_val * BEST_RULE_SCALE
+    # Apply rule scale
+    th_prob_drunk *= BEST_RULE_SCALE
 
-    # Hybrid score: weighted combination
-    hybrid_score = BEST_ML_WEIGHT * new_val + (1 - BEST_ML_WEIGHT) * rule_scaled_val
+    # Weighted hybrid score (use BEST_ML_WEIGHT for ML)
+    hybrid_prob_drunk = BEST_ML_WEIGHT * new_prob_drunk + (1 - BEST_ML_WEIGHT) * th_prob_drunk
 
-    # Optional override: if ML confidence is very high, use ML
+    # Optional override: if ML very confident, use ML only
     if new_confidence > BEST_ML_CONF_THRESH:
-        hybrid_final_val = new_val
-    else:
-        hybrid_final_val = 1 if hybrid_score > 0.5 else 0
+        hybrid_prob_drunk = new_prob_drunk
 
     # Final label & confidence
-    hybrid_label = "DRUNK" if hybrid_final_val == 1 else "SOBER"
-    hybrid_conf = hybrid_score if hybrid_final_val == 1 else 1 - hybrid_score
+    hybrid_label = "DRUNK" if hybrid_prob_drunk > 0.5 else "SOBER"
+    hybrid_conf = hybrid_prob_drunk if hybrid_label == "DRUNK" else 1 - hybrid_prob_drunk
 
     return hybrid_label, hybrid_conf
 
 
-# Handle full flow
+def computeEqual_hybrid_new_vs_threshold(new_final, new_confidence, th_final, th_conf):
+    """
+    Combines the new ML ensemble model and the threshold-based system
+    into a final hybrid verdict using **equal share** (50/50), based on probabilities.
+    
+    Args:
+        new_final (str): "DRUNK"/"SOBER" from new model
+        new_confidence (float): ML probability/confidence (0–1)
+        th_final (str): "DRUNK"/"SOBER" from threshold system
+        th_conf (float): Threshold system probability/confidence (0–1)
+        
+    Returns:
+        hybrid_label (str), hybrid_conf (float)
+    """
+
+    # Convert to DRUNK probabilities
+    new_prob_drunk = new_confidence if new_final == "DRUNK" else 1 - new_confidence
+    th_prob_drunk  = th_conf if th_final == "DRUNK" else 1 - th_conf
+
+    # Apply rule scale
+    th_prob_drunk *= BEST_RULE_SCALE
+
+    # Equal share hybrid score
+    hybrid_prob_drunk = 0.5 * new_prob_drunk + 0.5 * th_prob_drunk
+
+    # Final label & confidence
+    hybrid_label = "DRUNK" if hybrid_prob_drunk > 0.5 else "SOBER"
+    hybrid_conf = hybrid_prob_drunk if hybrid_label == "DRUNK" else 1 - hybrid_prob_drunk
+
+    return hybrid_label, hybrid_conf
+
 def handle_audio(temp_path):
     st.audio(temp_path)
 
@@ -564,14 +600,34 @@ def handle_audio(temp_path):
         hybrid_label, hybrid_conf = compute_hybrid_new_vs_threshold(
             new_final=new_final,
             new_confidence=new_confidence,
-            th_final=th_final
+            th_final=th_final,
+            th_conf=th_conf  # pass actual DRUNK probability from threshold system
         )
-        
+
         # Display hybrid verdict
         st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold)")
         st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
 
+        # --- Run hybrid combination only on new model + threshold ---
+        hybrid_label, hybrid_conf = computeEqual_hybrid_new_vs_threshold(
+            new_final=new_final,
+            new_confidence=new_confidence,
+            th_final=th_final,
+            th_conf=th_conf
+        )
+  # --- Show threshold features ---
+        threshold_feats = extract_threshold_features(temp_path)
+        st.subheader("🧪 Threshold Features")
+        st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
+        # --- Show new 13 features ---
+        #new_feats = extract_13_features(temp_path)
+        #st.subheader("🧩 New 13 Features")
+        #st.write(new_feats.T.rename(columns={0:"Value"}))
         
+        # Display hybrid verdict
+        st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold, Equal Share)")
+        st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
+
         
         # --- Save all extracted features + prediction result ---
         audio_name = os.path.basename(temp_path)
