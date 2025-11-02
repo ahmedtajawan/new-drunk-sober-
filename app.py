@@ -547,6 +547,38 @@ def computeEqual_hybrid_new_vs_threshold(new_final, new_confidence, th_final, th
 
     return hybrid_label, hybrid_conf
 
+def compute_hybrid_all_three(old_final, old_conf, new_final, new_conf, th_final, th_conf,
+                             w_old=0.3, w_new=0.4, w_th=0.3):
+    """
+    Combine old ML, new ML, and threshold system using weighted probabilities.
+
+    Args:
+        old_final, new_final, th_final: "DRUNK"/"SOBER"
+        old_conf, new_conf, th_conf: confidence/probabilities 0-1
+        w_old, w_new, w_th: weights (sum should be 1)
+
+    Returns:
+        hybrid_label (str), hybrid_conf (float)
+    """
+
+    # Convert to DRUNK probabilities
+    old_prob = old_conf if old_final == "DRUNK" else 1 - old_conf
+    new_prob = new_conf if new_final == "DRUNK" else 1 - new_conf
+    th_prob  = th_conf  if th_final  == "DRUNK" else 1 - th_conf
+
+    # Optional: scale threshold
+    th_prob *= BEST_RULE_SCALE
+
+    # Weighted sum
+    hybrid_prob = w_old*old_prob + w_new*new_prob + w_th*th_prob
+
+    # Decide label
+    hybrid_label = "DRUNK" if hybrid_prob > 0.5 else "SOBER"
+    hybrid_conf = hybrid_prob if hybrid_label == "DRUNK" else 1 - hybrid_prob
+
+    return hybrid_label, hybrid_conf
+    
+
 def handle_audio(temp_path):
     st.audio(temp_path)
 
@@ -586,14 +618,7 @@ def handle_audio(temp_path):
         st.write(f"🧩 Chunks analyzed: {len(th_preds)}")
         st.write(f"🔴 Drunk chunks: {th_preds.count('DRUNK')} | 🟢 Sober chunks: {th_preds.count('SOBER')}")
 
-            # --- Show threshold features ---
-        threshold_feats = extract_threshold_features(temp_path)
-        st.subheader("🧪 Threshold Features")
-        st.write(pd.DataFrame([threshold_feats]).T.rename(columns={0:"Value"}))
-        # --- Show new 13 features ---
-        new_feats = extract_13_features(temp_path)
-        st.subheader("🧩 New 13 Features")
-        st.write(new_feats.T.rename(columns={0:"Value"}))
+           
 
 
                 # --- Run hybrid combination only on new model + threshold ---
@@ -608,13 +633,27 @@ def handle_audio(temp_path):
         st.markdown("### 🔗 Hybrid Verdict (New Model + Threshold)")
         st.markdown(format_verdict_label(hybrid_label, hybrid_conf, was_tie=False), unsafe_allow_html=True)
 
-        # --- Run hybrid combination only on new model + threshold ---
+        # --- Run hybrid equal combination only on new model + threshold ---
         hybrid_label, hybrid_conf = computeEqual_hybrid_new_vs_threshold(
             new_final=new_final,
             new_confidence=new_confidence,
             th_final=th_final,
             th_conf=th_conf
         )
+
+
+        # --- 3-way hybrid combining old ML, new ML, threshold ---
+        threeway_label, threeway_conf = compute_hybrid_all_three(
+            old_final=final, old_conf=confidence,           # old ML
+            new_final=new_final, new_conf=new_confidence,   # new ML
+            th_final=th_final, th_conf=th_conf              # threshold
+        )
+        
+        st.markdown("### 🔗 3-Way Hybrid Verdict (Old ML + New ML + Threshold)")
+        st.markdown(format_verdict_label(threeway_label, threeway_conf, was_tie=False), unsafe_allow_html=True)
+
+
+        
   # --- Show threshold features ---
         threshold_feats = extract_threshold_features(temp_path)
         st.subheader("🧪 Threshold Features")
