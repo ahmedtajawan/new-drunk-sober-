@@ -11,13 +11,52 @@ from parselmouth.praat import call
 import wave, contextlib, math
 from pydub import AudioSegment
 import io
+import gspread
+import time
+from google.oauth2.service_account import Credentials
 
+# --- Function to get sheet client ---
+@st.cache_resource
+def get_gsheet_client():
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+    return gspread.authorize(creds)
 
-st.write("✅ Google Service Account Loaded:", "gcp_service_account" in st.secrets)
+# --- Function to read the current counter ---
+def get_current_count(sheet_name="drunk_sober_tracker"):
+    client = get_gsheet_client()
+    sheet = client.open(sheet_name).sheet1
+    data = sheet.get_all_records()
+    current_count = int(data[0]["value"]) if data else 0
+    return current_count
+
+# --- Function to increment counter after analysis ---
+def increment_counter(sheet_name="drunk_sober_tracker"):
+    client = get_gsheet_client()
+    sheet = client.open(sheet_name).sheet1
+    data = sheet.get_all_records()
+    current_count = int(data[0]["value"]) if data else 0
+    new_count = current_count + 1
+    sheet.update_cell(2, 2, new_count)
+    return new_count
+
+# --- Display auto-updating counter ---
+def show_live_counter(refresh_interval=15):
+    """Shows total audios analyzed with live refresh every X seconds."""
+    placeholder = st.empty()
+    while True:
+        current_count = get_current_count()
+        placeholder.markdown(f"### 🌍 Total audios analyzed so far: **{current_count}**")
+        time.sleep(refresh_interval)
+        st.experimental_rerun()
+
 
 
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
+
+st.sidebar.header("Global Usage Tracker")
+show_live_counter(refresh_interval=15)
+
 
 option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
 temp_path = None
@@ -700,6 +739,9 @@ def handle_audio(temp_path):
         
         st.subheader("🧪 Threshold Features (with trigger explanation)")
         st.dataframe(pd.DataFrame(detailed_data))
+        
+
+
 
         # --- Show new 13 features ---
         #new_feats = extract_13_features(temp_path)
