@@ -52,7 +52,7 @@ def increment_counter():
 # === Display live counter ===
 def show_live_counter(refresh_interval=15):
     """Auto-refreshes counter every X seconds"""
-    st_autorefresh(interval=refresh_interval * 1000, key="counter_refresh")
+  
     current_count = get_current_count()
     st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{ get_current_count()}**")
 
