@@ -11,3 +11,6 @@ matplotlib
 xgboost
 pydub
 shap
+gspread
+google-auth
+pandas
