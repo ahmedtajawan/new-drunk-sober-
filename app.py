@@ -18,11 +18,16 @@ from google.oauth2.service_account import Credentials
 # --- Function to get sheet client ---
 @st.cache_resource
 def get_gsheet_client():
-    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
     creds = Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"],
-    scopes=SCOPES
-)
+        st.secrets["gcp_service_account"],
+        scopes=scopes
+    )
+    return gspread.authorize(creds)
+
 
     return gspread.authorize(creds)
 
