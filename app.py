@@ -14,50 +14,49 @@ import io
 import gspread
 import time
 from google.oauth2.service_account import Credentials
+import streamlit as st
+import gspread
+import time
+from google.oauth2.service_account import Credentials
+from streamlit_autorefresh import st_autorefresh
 
-# --- Function to get sheet client ---
+# === Google Sheets Setup ===
+SHEET_ID = "1CpOS3ydW11hbjXDv-czJ3wDzUIL3mE2NLDkkwkcfbDQ"
+
 @st.cache_resource
 def get_gsheet_client():
+    """Authenticate and return a gspread client."""
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
-        "https://www.googleapis.com/auth/drive"
+        "https://www.googleapis.com/auth/drive.readonly",
     ]
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=scopes
-    )
+    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     return gspread.authorize(creds)
 
-
-    return gspread.authorize(creds)
-
-# --- Function to read the current counter ---
-def get_current_count(sheet_name="drunk_sober_tracker"):
+# === Read current count ===
+def get_current_count():
     client = get_gsheet_client()
-    sheet = client.open(sheet_name).sheet1
+    sheet = client.open_by_key(SHEET_ID).sheet1
     data = sheet.get_all_records()
     current_count = int(data[0]["value"]) if data else 0
     return current_count
 
-# --- Function to increment counter after analysis ---
-def increment_counter(sheet_name="drunk_sober_tracker"):
+# === Increment counter ===
+def increment_counter():
     client = get_gsheet_client()
-    sheet = client.open(sheet_name).sheet1
+    sheet = client.open_by_key(SHEET_ID).sheet1
     data = sheet.get_all_records()
     current_count = int(data[0]["value"]) if data else 0
     new_count = current_count + 1
     sheet.update_cell(2, 2, new_count)
     return new_count
 
-# --- Display auto-updating counter ---
+# === Display live counter ===
 def show_live_counter(refresh_interval=15):
-    """Shows total audios analyzed with live refresh every X seconds."""
-    placeholder = st.empty()
-    while True:
-        current_count = get_current_count()
-        placeholder.markdown(f"### 🌍 Total audios analyzed so far: **{current_count}**")
-        time.sleep(refresh_interval)
-        st.experimental_rerun()
+    """Auto-refreshes counter every X seconds"""
+    st_autorefresh(interval=refresh_interval * 1000, key="counter_refresh")
+    current_count = get_current_count()
+    st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{current_count}**")
 
 
 
