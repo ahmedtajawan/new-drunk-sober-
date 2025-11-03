@@ -18,7 +18,12 @@ from google.oauth2.service_account import Credentials
 # --- Function to get sheet client ---
 @st.cache_resource
 def get_gsheet_client():
-    creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"])
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"],
+    scopes=SCOPES
+)
+
     return gspread.authorize(creds)
 
 # --- Function to read the current counter ---
