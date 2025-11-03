@@ -53,7 +53,7 @@ def increment_counter():
     data = sheet.get_all_records()
     current_count = int(data[0]["value"]) if data else 0
     new_count = current_count + 1
-    sheet.update_cell(2, 2, new_count)
+    sheet.update_cell(2, 1, new_count)
     return new_count
 
 # === Display live counter ===
