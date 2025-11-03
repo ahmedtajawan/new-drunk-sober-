@@ -36,10 +36,15 @@ def get_gsheet_client():
 # === Read current count ===
 def get_current_count():
     client = get_gsheet_client()
-    sheet = client.open_by_key(SHEET_ID).sheet1
+    sheet = client.open_by_key("1CpOS3ydW11hbjXDv-czJ3wDzUIL3mE2NLDkkwkcfbDQ").sheet1
     data = sheet.get_all_records()
-    current_count = int(data[0]["value"]) if data else 0
-    return current_count
+    if not data:
+        return 0
+    try:
+        return int(data[0]["value"])
+    except KeyError:
+        return 0
+
 
 # === Increment counter ===
 def increment_counter():
@@ -56,7 +61,7 @@ def show_live_counter(refresh_interval=15):
     """Auto-refreshes counter every X seconds"""
     st_autorefresh(interval=refresh_interval * 1000, key="counter_refresh")
     current_count = get_current_count()
-    st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{current_count}**")
+    st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{ get_current_count()}**")
 
 
 
@@ -66,9 +71,7 @@ st.title("🎧 Drunk/Sober Audio Classifier")
 from streamlit_autorefresh import st_autorefresh
 
 # Run every 15 seconds
-countdown = st_autorefresh(interval=15 * 1000, key="counter_refresh")
 
-current_count = get_current_count()
 st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{current_count}**")
 
 
