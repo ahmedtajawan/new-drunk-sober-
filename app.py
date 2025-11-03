@@ -59,8 +59,13 @@ def show_live_counter(refresh_interval=15):
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
 
-st.sidebar.header("Global Usage Tracker")
-show_live_counter(refresh_interval=15)
+from streamlit_autorefresh import st_autorefresh
+
+# Run every 15 seconds
+countdown = st_autorefresh(interval=15 * 1000, key="counter_refresh")
+
+current_count = get_current_count()
+st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{current_count}**")
 
 
 option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
