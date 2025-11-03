@@ -13,6 +13,9 @@ from pydub import AudioSegment
 import io
 
 
+st.write("✅ Google Service Account Loaded:", "gcp_service_account" in st.secrets)
+
+
 st.set_page_config(page_title="Drunk/Sober Audio Classifier", layout="centered")
 st.title("🎧 Drunk/Sober Audio Classifier")
 
