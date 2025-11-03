@@ -72,7 +72,8 @@ from streamlit_autorefresh import st_autorefresh
 
 # Run every 15 seconds
 
-st.sidebar.markdown(f"### 🌍 Total audios analyzed: **{current_count}**")
+show_live_counter(refresh_interval=15)
+
 
 
 option = st.sidebar.radio("Choose Audio Input Method", ("Upload Audio File", "Record Audio"))
@@ -756,7 +757,8 @@ def handle_audio(temp_path):
         
         st.subheader("🧪 Threshold Features (with trigger explanation)")
         st.dataframe(pd.DataFrame(detailed_data))
-        
+        increment_counter()
+
 
 
 
