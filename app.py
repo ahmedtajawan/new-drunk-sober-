@@ -33,28 +33,21 @@ def get_gsheet_client():
     creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scopes)
     return gspread.authorize(creds)
 
-# === Read current count ===
 def get_current_count():
     client = get_gsheet_client()
     sheet = client.open_by_key("1CpOS3ydW11hbjXDv-czJ3wDzUIL3mE2NLDkkwkcfbDQ").sheet1
-    data = sheet.get_all_records()
-    if not data:
-        return 0
-    try:
-        return int(data[0]["value"])
-    except KeyError:
-        return 0
+    value = sheet.cell(1, 1).value  # read from A1 directly
+    return int(value) if value else 0
 
 
-# === Increment counter ===
 def increment_counter():
     client = get_gsheet_client()
-    sheet = client.open_by_key(SHEET_ID).sheet1
-    data = sheet.get_all_records()
-    current_count = int(data[0]["value"]) if data else 0
-    new_count = current_count + 1
-    sheet.update_cell(2, 1, new_count)
+    sheet = client.open_by_key("1CpOS3ydW11hbjXDv-czJ3wDzUIL3mE2NLDkkwkcfbDQ").sheet1
+    current = get_current_count()
+    new_count = current + 1
+    sheet.update_cell(1, 1, new_count)  # write to A1 directly
     return new_count
+
 
 # === Display live counter ===
 def show_live_counter(refresh_interval=15):
