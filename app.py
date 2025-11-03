@@ -473,7 +473,7 @@ def predict_drunk_sober_threshold(chunk_paths):
             drunk_score += 1 if vsa < thresholds['vsa'] else 0
             drunk_score += 1 if spectral_flatness > thresholds['mean_flatness'] else 0
             drunk_score += 1 if bandwidth > thresholds['bandwidth'] else 0
-            drunk_score += 1 if mean_rms < thresholds['mean_rms'] else 0
+            drunk_score += 1 if mean_rms > thresholds['mean_rms'] else 0
             drunk_score += 1 if std_rms > thresholds['std_rms'] else 0
 
             # Decide label for this chunk
