@@ -445,7 +445,7 @@ def predict_drunk_sober_threshold(chunk_paths):
     thresholds = {
         'vsa': 5.99e6,
         'mean_flatness': 0.449,
-        'bandwidth': 1849,
+        'bandwidth': 1845,
         'mean_rms': 0.0579,
         'std_rms': 0.0512
     }
